@@ -1,0 +1,119 @@
+---
+title: "Practical Machine Learning Course Project"
+author: "Daniel Neves Ielpo"
+date: "July 17, 2016"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(cache=TRUE)
+```
+
+# Overview
+
+This is my submission for the Practical Machine Learning Course Project.
+
+In this article I'm going to analyze the Weight Lifting Exercise Dataset and try to predict the manner in which the participants did the exercises.
+
+Six young health participants were asked to perform one set of 10 repetitions of the Unilateral Dumbbell Biceps Curl in five different fashions: exactly according to the specification (Class A), throwing the elbows to the front (Class B), lifting the dumbbell only halfway (Class C), lowering the dumbbell only halfway (Class D) and throwing the hips to the front (Class E).
+
+Class A corresponds to the specified execution of the exercise, while the other 4 classes correspond to common mistakes. Participants were supervised by an experienced weight lifter to make sure the execution complied to the manner they were supposed to simulate. The exercises were performed by six male participants aged between 20-28 years, with little weight lifting experience. We made sure that all participants could easily simulate the mistakes in a safe and controlled manner by using a relatively light dumbbell (1.25kg).
+
+# Loading the Weight Lifting Exercise Dataset
+
+Preparing the environment loading the necessary libraries
+
+```{r}
+library(caret)
+```
+
+Loading the training and testing datasets. I decided to convert the 'NA', '' and '#DIV/0!' strings to NA.
+
+```{r}
+trainingUrl <- "http://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+trainingData <- read.csv(url(trainingUrl), na.strings=c('NA','','#DIV/0!'))
+
+testingUrl <- "http://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+testingData <- read.csv(url(testingUrl),na.strings=c('NA','','#DIV/0!'))
+```
+
+# Cleaning the data
+
+I'm going to remove the first five columns that don't make any sense for prediction (X, user_name, raw_timestamp_part_1, raw_timestamp_part_2, cvtd_timestamp) as we are focusing on the sensors data.
+
+```{r}
+trainingData <- trainingData[, -(1:5)]
+```
+
+Now I'm going to reduce the number columns removing ther variables with nearly zero variance.
+
+```{r}
+nearZV <- nearZeroVar(trainingData)
+trainingData <- trainingData[, -nearZV]
+``` 
+
+As the dataset has many columns  with lots of NAs I'm going to remove the columns with more than 95% of NAs.
+
+```{r}
+lotsOfNA <- sapply(trainingData, function(x) mean(is.na(x))) > 0.95
+trainingData <- trainingData[, lotsOfNA==F]
+```
+
+In this next step I'm going to convert the classe column to factor.
+
+```{r}
+trainingData$classe <- as.factor(trainingData$classe)  
+```
+
+Now I'm going to divide the training data in two parts, one for training and the other for validation.
+
+```{r}
+set.seed(1981)
+partitionTrain <- createDataPartition(y=trainingData$classe, p=0.75, list=F)
+partitionTrainingData <- trainingData[partitionTrain, ]
+validationTrainingData <- trainingData[-partitionTrain, ]
+```
+
+# Model Building
+
+In this project I'm going to use two model algorithms and see which is the most accurate, in both models I'm going to use 3 level cross-validation to select optimal tuning parameters for the model. 
+
+The two models I'm going to test are:
+
+- Gradient Boosting Machine (gbm)
+- Random Forest Decision Trees (rf)
+
+```{r results="hide"}
+# First the gbm model
+gbmModelFit <- train(partitionTrainingData$classe ~ ., data = partitionTrainingData, trControl=trainControl(method='cv', number=3), method="gbm")
+
+# Second the rf model
+rfModelFit <- train(partitionTrainingData$classe ~ ., data = partitionTrainingData, trControl=trainControl(method='cv', number=3), method="rf")
+```
+
+# Evaluation of the Models (Out-of-sample Error)
+
+Now I'm going to compare the two fitted models to see which one have the best result using the validation set.
+
+```{r}
+gmbPred <- predict(gbmModelFit, newdata=validationTrainingData)
+confusionMatrix(gmbPred, validationTrainingData$classe)
+
+rfPred <- predict(rfModelFit, newdata=validationTrainingData)
+confusionMatrix(rfPred, validationTrainingData$classe)
+```
+
+As we can see the Random Forest algorithm had a slightly better result 99,88% of accuracy against 99,06% of accuracy in the Gradient Boosting Machine algorithm.
+
+# Course Project Prediction Quiz 
+
+In this section I'm going to use the Random Forest model to predict the results of the testing dataset to answer the QUIZ.
+
+```{r}
+predict(rfModelFit, newdata=testingData)
+```
+
+# References
+
+Velloso, E.; Bulling, A.; Gellersen, H.; Ugulino, W.; Fuks, H. Qualitative Activity Recognition of Weight Lifting Exercises. Proceedings of 4th International Conference in Cooperation with SIGCHI (Augmented Human '13). Stuttgart, Germany: ACM SIGCHI, 2013.var
